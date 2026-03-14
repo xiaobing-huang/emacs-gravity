@@ -1,9 +1,7 @@
 import { Effect, Layer, pipe } from "effect";
-import { existsSync, readFileSync } from "fs";
 import { join } from "path";
 import { log } from "./log.js";
 import { isSafeBashCommand } from "./safe-bash.js";
-import { sendToEmacs, sendToEmacsAndWait } from "./socket.js";
 import { nextDumpSeq, writeDumpFile } from "./dump.js";
 import type { HookData } from "./types.js";
 import {
@@ -18,8 +16,9 @@ import {
 } from "./enrich.js";
 import { ProcessIO, ProcessIOLive } from "./services/process-io.js";
 import { BridgeConfig, BridgeConfigLive } from "./services/config.js";
-import { FsLive } from "./services/fs.js";
+import { Fs, FsLive } from "./services/fs.js";
 import { LoggerLive } from "./services/logger.js";
+import { EmacsSocket, EmacsSocketLive } from "./services/emacs-socket.js";
 
 // Re-export types and transcript functions
 export type { HookData, TokenUsage } from "./types.js";
@@ -44,23 +43,11 @@ const parseStdin = (raw: string): Effect.Effect<HookData> =>
     Effect.catch(() => Effect.succeed({} as HookData)),
   );
 
-// --- Check ignored sessions ---
-const isIgnoredSession = (sessionId: string, cwd: string): boolean => {
-  const ignoreFile = join(cwd, ".claude", "gravity-ignored-sessions.json");
-  if (existsSync(ignoreFile)) {
-    try {
-      const ignored = JSON.parse(readFileSync(ignoreFile, "utf-8"));
-      return Array.isArray(ignored) && ignored.includes(sessionId);
-    } catch {
-      return false;
-    }
-  }
-  return false;
-};
-
 // --- Main program ---
 const program = Effect.gen(function* () {
   const io = yield* Effect.service(ProcessIO);
+  const fs = yield* Effect.service(Fs);
+  const socket = yield* Effect.service(EmacsSocket);
   const config = yield* Effect.service(BridgeConfig);
 
   yield* Effect.logDebug(`Process started: ${process.argv.join(" ")}`);
@@ -79,7 +66,8 @@ const program = Effect.gen(function* () {
 
   // Early exit: if socket doesn't exist, pass through immediately
   const socketPath = config.socketPath;
-  if (!existsSync(socketPath)) {
+  const socketExists = yield* socket.socketExists();
+  if (!socketExists) {
     yield* Effect.logDebug(`Socket not found at ${socketPath}, passing through`);
     yield* io.writeStdout(JSON.stringify({}) + "\n");
     return;
@@ -143,13 +131,17 @@ const program = Effect.gen(function* () {
 
   // Auto-approve safe read-only Bash commands (skip Emacs round-trip)
   if (eventName === "PermissionRequest" && !config.noAutoApprove && isSafeBashCommand(inputData)) {
-    yield* Effect.promise(() =>
-      sendToEmacs("PermissionAutoApproved", sessionId, cwd, pid, {
+    yield* socket.send({
+      event: "PermissionAutoApproved",
+      session_id: sessionId,
+      cwd,
+      pid,
+      data: {
         tool_name: inputData.tool_name,
         tool_use_id: inputData.tool_use_id,
         command: inputData.tool_input?.command,
-      })
-    );
+      },
+    });
     yield* io.writeStdout(JSON.stringify({
       hookSpecificOutput: {
         hookEventName: "PermissionRequest",
@@ -161,9 +153,26 @@ const program = Effect.gen(function* () {
 
   // Check if session is ignored — pass bidirectional hooks through to TUI
   if (eventName === "PermissionRequest" || eventName === "AskUserQuestionIntercept") {
-    if (isIgnoredSession(sessionId, cwd)) {
+    const ignored = yield* Effect.gen(function* () {
+      const ignoreFile = join(cwd, ".claude", "gravity-ignored-sessions.json");
+      const fileExists = yield* fs.exists(ignoreFile);
+      if (!fileExists) return false;
+      const content = yield* fs.readFile(ignoreFile).pipe(
+        Effect.catch(() => Effect.succeed("[]"))
+      );
+      const ignoredArr = JSON.parse(content);
+      return Array.isArray(ignoredArr) && ignoredArr.includes(sessionId);
+    });
+    if (ignored) {
       yield* Effect.logDebug(`Session ${sessionId} is ignored, passing ${eventName} through to TUI`);
-      yield* Effect.promise(() => sendToEmacs(eventName, sessionId, cwd, pid, inputData, rawHookInput));
+      yield* socket.send({
+        event: eventName,
+        session_id: sessionId,
+        cwd,
+        pid,
+        data: inputData,
+        hook_input: rawHookInput,
+      });
       yield* io.writeStdout(JSON.stringify({}) + "\n");
       return;
     }
@@ -173,9 +182,14 @@ const program = Effect.gen(function* () {
   if (eventName === "PermissionRequest") {
     const toolName = inputData.tool_name || "unknown";
     yield* Effect.logWarning(`PermissionRequest: waiting for Emacs response [tool=${toolName}, session=${sessionId}]`);
-    const response = yield* Effect.promise(() =>
-      sendToEmacsAndWait(eventName, sessionId, cwd, pid, inputData, undefined, rawHookInput)
-    );
+    const response = yield* socket.sendAndWait({
+      event: eventName,
+      session_id: sessionId,
+      cwd,
+      pid,
+      data: inputData,
+      hook_input: rawHookInput,
+    });
 
     // Guard against empty response
     if (!response || Object.keys(response).length === 0) {
@@ -211,9 +225,14 @@ const program = Effect.gen(function* () {
 
   } else if (eventName === "AskUserQuestionIntercept") {
     yield* Effect.logWarning("AskUserQuestionIntercept: waiting for Emacs response");
-    const response = yield* Effect.promise(() =>
-      sendToEmacsAndWait("PreToolUse", sessionId, cwd, pid, inputData, undefined, rawHookInput)
-    );
+    const response = yield* socket.sendAndWait({
+      event: "PreToolUse",
+      session_id: sessionId,
+      cwd,
+      pid,
+      data: inputData,
+      hook_input: rawHookInput,
+    });
     const output = (response && response.hookSpecificOutput)
       ? JSON.stringify(response)
       : JSON.stringify({});
@@ -228,7 +247,14 @@ const program = Effect.gen(function* () {
         `[FINAL_CHECK_BEFORE_SEND] agent_stop_text=${typeof inputData.agent_stop_text === "string" ? `"${(inputData.agent_stop_text as string).substring(0, 40)}"` : inputData.agent_stop_text}`
       );
     }
-    yield* Effect.promise(() => sendToEmacs(eventName, sessionId, cwd, pid, inputData, rawHookInput));
+    yield* socket.send({
+      event: eventName,
+      session_id: sessionId,
+      cwd,
+      pid,
+      data: inputData,
+      hook_input: rawHookInput,
+    });
     yield* io.writeStdout(JSON.stringify({}) + "\n");
   }
 });
@@ -254,7 +280,18 @@ const MainLive = Layer.mergeAll(
 
 // BridgeConfigLive depends on ProcessIO + Fs
 const ConfigLayer = Layer.provide(BridgeConfigLive, MainLive);
-const FullLayer = Layer.mergeAll(MainLive, ConfigLayer);
+
+// EmacsSocket created with socket path from environment (same as legacy socket.ts)
+const socketPathFromEnv = (() => {
+  const gravitySock = process.env.CLAUDE_GRAVITY_SOCK;
+  if (gravitySock) return gravitySock;
+  const sockDir = process.env.CLAUDE_GRAVITY_SOCK_DIR;
+  if (sockDir) return join(sockDir, "claude-gravity.sock");
+  const home = process.env.HOME || "/tmp";
+  return join(home, ".local", "state", "claude-gravity.sock");
+})();
+
+const FullLayer = Layer.mergeAll(MainLive, ConfigLayer, EmacsSocketLive(socketPathFromEnv));
 
 // --- Entry point ---
 const args = process.argv.slice(2);
