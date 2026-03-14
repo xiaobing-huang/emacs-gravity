@@ -211,7 +211,7 @@ CAP is an alist with keys: name, description, scope, file-path, type."
 Used for standalone skills/agents/commands sections."
   (when caps
     (let ((indent (claude-gravity--indent)))
-      (magit-insert-section (category title t)
+      (magit-insert-section (category title t :selective-highlight t)
         (magit-insert-heading
           (format "%s%s (%d)"
                   indent
@@ -232,7 +232,7 @@ Used for standalone skills/agents/commands sections."
          (total (alist-get 'total plugin))
          (indent (claude-gravity--indent)))
     (when (> total 0)
-      (magit-insert-section (plugin-entry name t)
+      (magit-insert-section (plugin-entry name t :selective-highlight t)
         ;; Plugin header with counts
         (magit-insert-heading
           (format "%s%s  %s — %d items"
@@ -243,7 +243,7 @@ Used for standalone skills/agents/commands sections."
         ;; Skills subsection
         (when skills
           (let ((subindent (concat indent "  ")))
-            (magit-insert-section (skills "skills" t)
+            (magit-insert-section (skills "skills" t :selective-highlight t)
               (magit-insert-heading
                 (format "%sSkills (%d)"
                         subindent
@@ -253,7 +253,7 @@ Used for standalone skills/agents/commands sections."
         ;; Agents subsection
         (when agents
           (let ((subindent (concat indent "  ")))
-            (magit-insert-section (agents "agents" t)
+            (magit-insert-section (agents "agents" t :selective-highlight t)
               (magit-insert-heading
                 (format "%sAgents (%d)"
                         subindent
@@ -263,7 +263,7 @@ Used for standalone skills/agents/commands sections."
         ;; Commands subsection
         (when commands
           (let ((subindent (concat indent "  ")))
-            (magit-insert-section (commands "commands" t)
+            (magit-insert-section (commands "commands" t :selective-highlight t)
               (magit-insert-heading
                 (format "%sCommands (%d)"
                         subindent
@@ -273,7 +273,7 @@ Used for standalone skills/agents/commands sections."
         ;; MCP servers subsection
         (when mcp
           (let ((subindent (concat indent "  ")))
-            (magit-insert-section (mcp-section "mcp" t)
+            (magit-insert-section (mcp-section "mcp" t :selective-highlight t)
               (magit-insert-heading
                 (format "%sMCP Tools (%d)"
                         subindent
@@ -299,7 +299,7 @@ Shows plugins grouped in Plugins section, standalone categories as siblings."
       (when (or plugins standalone-skills standalone-agents standalone-commands standalone-mcp)
         (let ((indent (claude-gravity--indent))
               (total (claude-gravity--capabilities-total-count grouped)))
-          (magit-insert-section (capabilities project-dir t)
+          (magit-insert-section (capabilities project-dir t :selective-highlight t)
             (magit-insert-heading
               (format "%s%s"
                       indent
@@ -308,7 +308,7 @@ Shows plugins grouped in Plugins section, standalone categories as siblings."
             ;; Plugins section (same visual style as standalone categories)
             (when plugins
               (let ((indent (claude-gravity--indent)))
-                (magit-insert-section (category "Plugins" t)
+                (magit-insert-section (category "Plugins" t :selective-highlight t)
                   (magit-insert-heading
                     (format "%s%s (%d)"
                             indent
@@ -361,24 +361,21 @@ Maintained for backward compatibility."
                                 projects)))
                    claude-gravity--sessions)
           (erase-buffer)
-          (magit-insert-section (root)
-            (let* ((total-count (hash-table-count claude-gravity--sessions))
-                   (width (max 40 (- (or (window-width) 80) 2)))
-                   (top-line (make-string width ?━)))
-              (magit-insert-section (header)
-                (insert (propertize top-line 'face 'claude-gravity-divider) "\n")
+          (magit-insert-section (root nil nil :selective-highlight t)
+            (let* ((total-count (hash-table-count claude-gravity--sessions)))
+              (magit-insert-section (header nil nil :selective-highlight t)
                 (magit-insert-heading
                   (format "%s%s"
                           (propertize "Structured Claude Sessions" 'face 'claude-gravity-header-title)
                           (propertize (format "  ◆ %d sessions" total-count) 'face 'claude-gravity-detail-label)))
-                (insert (propertize top-line 'face 'claude-gravity-divider) "\n\n")))
+                (insert "\n")))
             ;; Inbox: summary strip at top
             (claude-gravity--insert-inbox-summary)
             (if (= (hash-table-count claude-gravity--sessions) 0)
                 (insert (propertize "  No sessions.\n" 'face 'claude-gravity-detail-label))  ;; static text, not a section
               (maphash
                (lambda (proj-name sessions)
-                 (magit-insert-section (project proj-name t)
+                 (magit-insert-section (project proj-name t :selective-highlight t)
                    (magit-insert-heading
                      (format "%s (%d)" proj-name (length sessions)))
                    (dolist (session (sort sessions
@@ -429,7 +426,7 @@ Maintained for backward compatibility."
                                     (propertize " [ignored]"
                                                 'face 'claude-gravity-detail-label)
                                   "")))
-                          (magit-insert-section (session-entry sid)
+                          (magit-insert-section (session-entry sid nil :selective-highlight t)
                             (magit-insert-heading
                               (format "%s%s %s %s %s%s %s  %s%s%s  [%d tools]%s"
                                       (claude-gravity--indent)
@@ -773,7 +770,7 @@ Only shows permission, question, and plan-review items (not idle)."
                               '(permission question plan-review))))
                  claude-gravity--inbox)))
     (when items
-      (magit-insert-section (session-inbox nil t)
+      (magit-insert-section (session-inbox nil t :selective-highlight t)
         (magit-insert-heading
           (propertize (format "Inbox (%d)" (length items))
                       'face 'claude-gravity-question))
@@ -795,7 +792,7 @@ Only shows permission, question, and plan-review items (not idle)."
               (pos-in-section (when (magit-current-section)
                                 (- (point) (oref (magit-current-section) start)))))
           (erase-buffer)
-          (magit-insert-section (root)
+          (magit-insert-section (root nil nil :selective-highlight t)
             (claude-gravity-insert-header session)
             (claude-gravity-insert-plan session)
             (claude-gravity-insert-streaming-text session)

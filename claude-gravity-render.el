@@ -22,11 +22,8 @@
                       (+ (or (alist-get 'input_tokens usage) 0)
                          (or (alist-get 'cache_read_input_tokens usage) 0)
                          (or (alist-get 'cache_creation_input_tokens usage) 0))))
-         (out-tokens (when usage (or (alist-get 'output_tokens usage) 0)))
-         (width (max 40 (- (or (window-width) 80) 2)))
-         (top-line (make-string width ?━)))
-    (magit-insert-section (header)
-      (insert (propertize top-line 'face 'claude-gravity-divider) "\n")
+         (out-tokens (when usage (or (alist-get 'output_tokens usage) 0))))
+    (magit-insert-section (header nil nil :selective-highlight t)
       (magit-insert-heading
         (concat
          (propertize "Structured Claude Session" 'face 'claude-gravity-header-title)
@@ -46,9 +43,7 @@
            (propertize (format "  ↑%s ↓%s tokens"
                                (claude-gravity--format-token-count out-tokens)
                                (claude-gravity--format-token-count in-tokens))
-                       'face 'claude-gravity-detail-label))))
-      (insert (propertize top-line 'face 'claude-gravity-divider) "\n")
-      (insert "\n"))))
+                       'face 'claude-gravity-detail-label)))))))
 
 
 (defun claude-gravity--format-turn-tokens (turn-node)
@@ -114,7 +109,7 @@ Cycles are pre-computed — no dedup or grouping needed."
               (insert prefix (propertize "Thinking..." 'face 'claude-gravity-thinking) "\n")
               (claude-gravity--insert-wrapped athink (+ indent 4) 'claude-gravity-thinking)))
           ;; Response cycle section
-          (magit-insert-section (response-cycle cycle-idx should-collapse)
+          (magit-insert-section (response-cycle cycle-idx should-collapse :selective-highlight t)
             (magit-insert-heading
               (if split
                   (car split)
@@ -153,7 +148,7 @@ Cycles are pre-computed — no dedup or grouping needed."
                                (claude-gravity--task-sort-key (alist-get 'status b)))))))
         (let ((completed (cl-count-if (lambda (tk) (equal (alist-get 'status tk) "completed")) sorted))
               (total (length sorted)))
-          (magit-insert-section (turn-tasks nil t)
+          (magit-insert-section (turn-tasks nil t :selective-highlight t)
             (magit-insert-heading
               (format "%sTasks (%d/%d)" (claude-gravity--indent) completed total))
             (dolist (task sorted)
@@ -400,7 +395,7 @@ DEPTH tracks nesting level for background tint."
                       (insert prefix (propertize "Thinking..." 'face 'claude-gravity-thinking) "\n")
                       (claude-gravity--insert-wrapped athink (+ indent 4) 'claude-gravity-thinking)))
                   ;; Response cycle section
-                  (magit-insert-section (response-cycle cycle-idx should-collapse)
+                  (magit-insert-section (response-cycle cycle-idx should-collapse :selective-highlight t)
                     (magit-insert-heading
                       (if split
                           (car split)
@@ -556,7 +551,7 @@ Iterates the :turns tree directly — no grouping or hash construction needed."
                          (alist-get 'tasks tn)
                          (alist-get 'prompt tn)))
                    turn-nodes)
-      (magit-insert-section (turns nil t)
+      (magit-insert-section (turns nil t :selective-highlight t)
         (magit-insert-heading
           (claude-gravity--section-divider (format "Turns (%d)" current-turn)))
         (let ((prev-turn-rendered nil))
@@ -574,7 +569,7 @@ Iterates the :turns tree directly — no grouping or hash construction needed."
                 (if (= turn-num 0)
                     ;; Turn 0: pre-prompt activity
                     (progn
-                      (magit-insert-section (turn 0 t)
+                      (magit-insert-section (turn 0 t :selective-highlight t)
                         (magit-insert-heading
                           (format "%s  %s"
                                   (propertize "Pre-prompt activity" 'face 'claude-gravity-detail-label)
@@ -622,7 +617,7 @@ Iterates the :turns tree directly — no grouping or hash construction needed."
                         (let ((start (point))
                               (fill-column (max 40 (- (or (window-width) 80) 2)))
                               (fill-prefix (make-string cont-indent ?\s)))
-                          (insert prompt-text "\n")
+                          (insert (propertize prompt-text 'face prompt-face) "\n")
                           (when (> (length prompt-text) (- fill-column cont-indent))
                             (fill-region start (point))))
                         ;; Tag prompt region so `w` copies just the prompt text
@@ -638,7 +633,7 @@ Iterates the :turns tree directly — no grouping or hash construction needed."
                                           ""))
                                (summary-str (if (string-empty-p summary) ""
                                               (concat "  " (propertize summary 'face 'claude-gravity-detail-label)))))
-                          (magit-insert-section (turn turn-num t)
+                          (magit-insert-section (turn turn-num t :selective-highlight t)
                             (magit-insert-heading
                               (format "%s%s%s  %s%s%s"
                                       (claude-gravity--indent)
@@ -651,7 +646,7 @@ Iterates the :turns tree directly — no grouping or hash construction needed."
                             (claude-gravity--insert-agent-completions turn-agents))
                           (claude-gravity--insert-stop-text turn-node))
                       ;; Active turn: full render
-                      (magit-insert-section (turn turn-num (not is-current))
+                      (magit-insert-section (turn turn-num (not is-current) :selective-highlight t)
                         (magit-insert-heading
                           (format "%s%s%s  %s%s"
                                   (claude-gravity--indent)
@@ -829,7 +824,7 @@ the message under `message` with `role`, `content`, and `model`."
         (setq file-list (sort file-list
                               (lambda (a b)
                                 (time-less-p (nth 2 b) (nth 2 a)))))
-        (magit-insert-section (files nil t)
+        (magit-insert-section (files nil t :selective-highlight t)
           (magit-insert-heading
             (claude-gravity--section-divider (format "Files (%d)" (length file-list))))
           (dolist (entry file-list)
@@ -851,7 +846,7 @@ the message under `message` with `role`, `content`, and `model`."
   "Insert allow patterns section for SESSION."
   (let ((patterns (plist-get session :allow-patterns)))
     (when patterns
-      (magit-insert-section (allow-patterns nil t)
+      (magit-insert-section (allow-patterns nil t :selective-highlight t)
         (magit-insert-heading
           (claude-gravity--section-divider (format "Allow Patterns (%d)" (length patterns))))
         (dolist (pat patterns)

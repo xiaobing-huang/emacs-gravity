@@ -24,6 +24,7 @@
 (declare-function claude-gravity--clear-notification-indicator "claude-gravity-socket")
 (declare-function claude-gravity--tmux-ensure-heartbeat "claude-gravity-tmux")
 (declare-function claude-gravity--tmux-alive-p "claude-gravity-tmux")
+(declare-function claude-gravity--tmux-call "claude-gravity-tmux")
 (declare-function claude-gravity--plan-revision-diff "claude-gravity-diff")
 (declare-function claude-gravity--plan-review-apply-margin-indicators "claude-gravity-diff")
 (declare-function claude-gravity--daemon-rekey-session "claude-gravity-daemon")
@@ -431,15 +432,15 @@ the model mutation API to update session state."
                ;; Escape aborts any lingering autocomplete, then /clear
                (run-at-time 0.5 nil
                  (lambda ()
-                   (call-process "tmux" nil nil nil
+                   (claude-gravity--tmux-call
                                  "send-keys" "-t" tmux-name "Escape")
                    (run-at-time 1 nil
                      (lambda ()
-                       (call-process "tmux" nil nil nil
+                       (claude-gravity--tmux-call
                                      "send-keys" "-t" tmux-name "-l" "/clear")
                        (run-at-time 2 nil
                          (lambda ()
-                           (call-process "tmux" nil nil nil
+                           (claude-gravity--tmux-call
                                          "send-keys" "-t" tmux-name "Enter")))))))))))))
 
     ("SubagentStart"

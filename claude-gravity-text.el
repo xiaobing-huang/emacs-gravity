@@ -412,7 +412,7 @@ LABEL gets detail-label face, VALUE gets optional FACE."
              (preview-lines (claude-gravity--plan-preview-lines content 8))
              (all-lines (split-string content "\n" t "[ \t]"))
              (truncated (> (length all-lines) (length preview-lines))))
-        (magit-insert-section (plan nil t)
+        (magit-insert-section (plan nil t :selective-highlight t)
           (magit-insert-heading
             (claude-gravity--section-divider "Plan"))
           (claude-gravity--insert-wrapped

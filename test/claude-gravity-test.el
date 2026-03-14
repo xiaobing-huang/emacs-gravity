@@ -636,5 +636,106 @@ The tmux-prompt-sent flag should prevent duplicates."
       ;; Agent: empty
       (should (= 0 (length agent-tools))))))
 
+
+;;; Screenshot compose tests
+
+(ert-deftest cg-test-compose-screenshot-inserts-path ()
+  "Screenshot function inserts file path at point in compose buffer."
+  (let ((buf (generate-new-buffer " *test-compose-screenshot*")))
+    (unwind-protect
+        (with-current-buffer buf
+          (text-mode)
+          (claude-gravity-compose-mode 1)
+          (insert "Check this UI: ")
+          ;; Create a temp file to simulate successful capture
+          (let* ((tmp (make-temp-file "claude-gravity-screenshot-" nil ".png"))
+                 (claude-gravity--compose-screenshot-path tmp)
+                 (claude-gravity--compose-screenshot-capture-fn
+                  (lambda (_path) 0)))  ;; simulate success
+            (unwind-protect
+                (progn
+                  ;; Write some bytes so the file exists and is non-empty
+                  (with-temp-file tmp (insert "fake-png-data"))
+                  (claude-gravity-compose-screenshot)
+                  ;; Verify the path was inserted
+                  (let ((content (buffer-string)))
+                    (should (string-match-p (regexp-quote tmp) content))
+                    (should (string-match-p "Check this UI: " content))))
+              (when (file-exists-p tmp) (delete-file tmp)))))
+      (kill-buffer buf))))
+
+(ert-deftest cg-test-compose-screenshot-cancelled ()
+  "Screenshot function shows message when user cancels capture."
+  (let ((buf (generate-new-buffer " *test-compose-screenshot-cancel*")))
+    (unwind-protect
+        (with-current-buffer buf
+          (text-mode)
+          (claude-gravity-compose-mode 1)
+          (insert "before")
+          (let ((claude-gravity--compose-screenshot-path "/tmp/nonexistent.png")
+                (claude-gravity--compose-screenshot-capture-fn
+                 (lambda (_path) 1)))  ;; simulate cancellation
+            (claude-gravity-compose-screenshot))
+          ;; Buffer should be unchanged
+          (should (equal "before" (buffer-string))))
+      (kill-buffer buf))))
+
+(ert-deftest cg-test-tmux-send-keys-delays-before-enter ()
+  "Verify send-keys sends text then Enter in correct order.
+The delay variable `claude-gravity--tmux-enter-delay' prevents
+Claude Code's autocomplete from consuming Enter (see DEVELOPMENT.md).
+The delay uses `run-at-time' so Emacs stays responsive."
+  ;; Verify the delay variable defaults to 2
+  (should (= 2 claude-gravity--tmux-enter-delay))
+  (let ((calls nil)
+        (claude-gravity--tmux-enter-delay 0))
+    (cl-letf (((symbol-function 'claude-gravity--tmux-call)
+               (lambda (&rest args) (push args calls) 0))
+              ((symbol-function 'run-at-time)
+               (lambda (_time _repeat fn &rest args) (apply fn args) nil)))
+      (claude-gravity--tmux-send-keys "test-session" "/tmp/screenshot.png")
+      (setq calls (nreverse calls))
+      ;; Expect: send-keys -l text, then send-keys Enter (via deferred timer)
+      (should (= 2 (length calls)))
+      (should (equal (nth 0 calls)
+                     '("send-keys" "-t" "test-session"
+                       "-l" "/tmp/screenshot.png")))
+      (should (equal (nth 1 calls)
+                     '("send-keys" "-t" "test-session" "Enter"))))))
+
+(ert-deftest cg-test-tmux-send-keys-multiline-delays-before-enter ()
+  "Verify multi-line send-keys uses load-buffer/paste-buffer then Enter."
+  (let ((calls nil)
+        (claude-gravity--tmux-enter-delay 0))
+    (cl-letf (((symbol-function 'claude-gravity--tmux-call)
+               (lambda (&rest args) (push args calls) 0))
+              ((symbol-function 'run-at-time)
+               (lambda (_time _repeat fn &rest args) (apply fn args) nil)))
+      (claude-gravity--tmux-send-keys "test-session" "line1\nline2")
+      (setq calls (nreverse calls))
+      ;; Expect: load-buffer <tmpfile>, paste-buffer, send-keys Enter
+      (should (= 3 (length calls)))
+      (should (equal (car (nth 0 calls)) "load-buffer"))
+      (should (equal (nth 1 calls)
+                     '("paste-buffer" "-t" "test-session")))
+      (should (equal (nth 2 calls)
+                     '("send-keys" "-t" "test-session" "Enter"))))))
+
+;;; Evil-mode compatibility
+
+(ert-deftest cg-test-permission-action-mode-activates ()
+  "Permission action mode activates without error."
+  (with-temp-buffer
+    (claude-gravity-permission-action-mode 1)
+    (should claude-gravity-permission-action-mode)
+    (claude-gravity-permission-action-mode -1)))
+
+(ert-deftest cg-test-question-action-mode-activates ()
+  "Question action mode activates without error."
+  (with-temp-buffer
+    (claude-gravity-question-action-mode 1)
+    (should claude-gravity-question-action-mode)
+    (claude-gravity-question-action-mode -1)))
+
 (provide 'claude-gravity-test)
 ;;; claude-gravity-test.el ends here

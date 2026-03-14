@@ -8,19 +8,22 @@
 ;;; Faces
 
 (defface claude-gravity-tool-done
-  '((t :foreground "green"))
+  '((((background dark))  :foreground "green")
+    (((background light)) :foreground "#006600"))
   "Face for completed tool status indicator."
   :group 'claude-gravity)
 
 
 (defface claude-gravity-tool-running
-  '((t :foreground "yellow"))
+  '((((background dark))  :foreground "yellow")
+    (((background light)) :foreground "#996600"))
   "Face for running tool status indicator."
   :group 'claude-gravity)
 
 
 (defface claude-gravity-tool-error
-  '((t :foreground "red"))
+  '((((background dark))  :foreground "red")
+    (((background light)) :foreground "#cc0000"))
   "Face for failed tool status indicator."
   :group 'claude-gravity)
 
@@ -32,121 +35,141 @@
 
 
 (defface claude-gravity-detail-label
-  '((t :foreground "gray50"))
+  '((((background dark))  :foreground "gray60")
+    (((background light)) :foreground "gray40"))
   "Face for detail labels in expanded tool view."
   :group 'claude-gravity)
 
 
 (defface claude-gravity-stderr
-  '((t :foreground "red"))
+  '((((background dark))  :foreground "red")
+    (((background light)) :foreground "#cc0000"))
   "Face for stderr output."
   :group 'claude-gravity)
 
 
 (defface claude-gravity-session-ended
-  '((t :foreground "gray50"))
+  '((((background dark))  :foreground "gray60")
+    (((background light)) :foreground "gray40"))
   "Face for ended session indicator."
   :group 'claude-gravity)
 
 
 (defface claude-gravity-prompt
-  '((t :foreground "cyan"))
+  '((((background dark))  :foreground "cyan")
+    (((background light)) :foreground "#006699"))
   "Face for user prompt text."
   :group 'claude-gravity)
 
 
 (defface claude-gravity-task-done
-  '((t :foreground "green"))
+  '((((background dark))  :foreground "green")
+    (((background light)) :foreground "#006600"))
   "Face for completed task checkbox."
   :group 'claude-gravity)
 
 
 (defface claude-gravity-task-in-progress
-  '((t :foreground "yellow"))
+  '((((background dark))  :foreground "yellow")
+    (((background light)) :foreground "#996600"))
   "Face for in-progress task checkbox."
   :group 'claude-gravity)
 
 
 (defface claude-gravity-task-pending
-  '((t :foreground "gray50"))
+  '((((background dark))  :foreground "gray60")
+    (((background light)) :foreground "gray40"))
   "Face for pending task checkbox."
   :group 'claude-gravity)
 
 
 (defface claude-gravity-task-active-form
-  '((t :foreground "gray50" :slant italic))
+  '((((background dark))  :foreground "gray60" :slant italic)
+    (((background light)) :foreground "gray40" :slant italic))
   "Face for task activeForm text."
   :group 'claude-gravity)
 
 
 (defface claude-gravity-status-responding
-  '((t :foreground "yellow"))
+  '((((background dark))  :foreground "yellow")
+    (((background light)) :foreground "#996600"))
   "Face for responding status."
   :group 'claude-gravity)
 
 
 (defface claude-gravity-status-idle
-  '((t :foreground "green"))
+  '((((background dark))  :foreground "green")
+    (((background light)) :foreground "#006600"))
   "Face for idle status."
   :group 'claude-gravity)
 
 
 (defface claude-gravity-file-ops
-  '((t :foreground "gray60"))
+  '((((background dark))  :foreground "gray60")
+    (((background light)) :foreground "gray40"))
   "Face for file operation labels."
   :group 'claude-gravity)
 
 
 (defface claude-gravity-question
-  '((t :foreground "magenta"))
+  '((((background dark))  :foreground "magenta")
+    (((background light)) :foreground "#880088"))
   "Face for AskUserQuestion prompt indicators."
   :group 'claude-gravity)
 
 
 (defface claude-gravity-tool-signature
-  '((t :foreground "gray45" :slant italic))
+  '((((background dark))  :foreground "gray55" :slant italic)
+    (((background light)) :foreground "gray35" :slant italic))
   "Face for tool permission signature text."
   :group 'claude-gravity)
 
 
 (defface claude-gravity-tool-description
-  '((t :foreground "#88cc88"))
+  '((((background dark))  :foreground "#88cc88")
+    (((background light)) :foreground "#338833"))
   "Face for tool description text (the human-readable intent)."
   :group 'claude-gravity)
 
 
 (defface claude-gravity-assistant-text
-  '((t :foreground "#ffbb66"))
+  '((((background dark))  :foreground "#ffbb66")
+    (((background light)) :foreground "#aa6600"))
   "Face for assistant monologue text between tool calls."
   :group 'claude-gravity)
 
 
 (defface claude-gravity-agent-stop-text
-  '((t :foreground "#88ccaa"))
+  '((((background dark))  :foreground "#88ccaa")
+    (((background light)) :foreground "#337755"))
   "Face for agent completion summary text (SubagentStop)."
   :group 'claude-gravity)
 
 
 (defface claude-gravity-thinking
-  '((t :foreground "#d0a0ff" :slant italic))
+  '((((background dark))  :foreground "#d0a0ff" :slant italic)
+    (((background light)) :foreground "#6633aa" :slant italic))
   "Face for assistant extended thinking text."
   :group 'claude-gravity)
 
 
 (defface claude-gravity-section-heading
-  '((t :weight bold :foreground "white"))
+  '((((background dark))  :weight bold :foreground "white")
+    (((background light)) :weight bold :foreground "black"))
   "Face for major section heading text."
   :group 'claude-gravity)
 
 
 (defface claude-gravity-divider
-  '((t :foreground "gray40"))
+  '((((background dark))  :foreground "gray40")
+    (((background light)) :foreground "gray60"))
   "Face for section and turn separator lines."
   :group 'claude-gravity)
 
 
 (defface claude-gravity-margin-indicator
-  '((t :foreground "gray40"))
+  '((((background dark))  :foreground "gray40")
+    (((background light)) :foreground "gray60"))
   "Fallback face for margin block indicators (▎).
 Content-type faces (thinking, assistant-text, detail-label) are
 preferred at call sites; this face is used when no content face
@@ -176,7 +199,8 @@ is provided."
 
 
 (defface claude-gravity-agent-margin
-  '((t :foreground "#5599aa"))
+  '((((background dark))  :foreground "#5599aa")
+    (((background light)) :foreground "#337788"))
   "Fallback face for margin indicator inside agent response cycles.
 Content-type faces are preferred; agent distinction is provided
 by the background tint (`claude-gravity-agent-bg')."
@@ -240,13 +264,15 @@ by the background tint (`claude-gravity-agent-bg')."
 
 
 (defface claude-gravity-header-title
-  '((t :weight bold :foreground "white"))
+  '((((background dark))  :weight bold :foreground "white")
+    (((background light)) :weight bold :foreground "black"))
   "Face for the main buffer header title."
   :group 'claude-gravity)
 
 
 (defface claude-gravity-slug
-  '((t :foreground "dark gray" :slant italic))
+  '((((background dark))  :foreground "dark gray" :slant italic)
+    (((background light)) :foreground "gray40" :slant italic))
   "Face for the session slug shown in the header."
   :group 'claude-gravity)
 

@@ -110,23 +110,38 @@ Returns the buffer.  Does NOT display the buffer — caller should switch/pop."
        buf))))
 
 
+(defvar claude-gravity--tmux-enter-delay 2
+  "Seconds to wait before sending Enter after text in tmux.
+Claude Code's autocomplete dropdown can consume Enter if sent too
+quickly after text input.  See DEVELOPMENT.md.")
+
+(defun claude-gravity--tmux-call (&rest args)
+  "Call tmux with ARGS via `call-process'."
+  (apply #'call-process "tmux" nil nil nil args))
+
 (defun claude-gravity--tmux-send-keys (tmux-name text)
   "Send TEXT to tmux session TMUX-NAME, then press Enter.
 For multi-line text, uses tmux load-buffer/paste-buffer to avoid
-send-keys -l interpreting newlines as Enter."
+send-keys -l interpreting newlines as Enter.
+A delay (see `claude-gravity--tmux-enter-delay') is inserted before
+Enter to prevent Claude Code's autocomplete dropdown from consuming
+the keystroke (see DEVELOPMENT.md).  The delay uses `run-at-time'
+so Emacs remains responsive."
   (if (string-match-p "\n" text)
       ;; Multi-line: pipe through load-buffer then paste
       (let ((tmpfile (make-temp-file "claude-tmux-")))
-        (unwind-protect
-            (progn
-              (with-temp-file tmpfile (insert text))
-              (call-process "tmux" nil nil nil "load-buffer" tmpfile)
-              (call-process "tmux" nil nil nil "paste-buffer" "-t" tmux-name)
-              (call-process "tmux" nil nil nil "send-keys" "-t" tmux-name "Enter"))
-          (delete-file tmpfile)))
+        (with-temp-file tmpfile (insert text))
+        (claude-gravity--tmux-call "load-buffer" tmpfile)
+        (claude-gravity--tmux-call "paste-buffer" "-t" tmux-name)
+        (run-at-time claude-gravity--tmux-enter-delay nil
+          (lambda ()
+            (claude-gravity--tmux-call "send-keys" "-t" tmux-name "Enter")
+            (ignore-errors (delete-file tmpfile)))))
     ;; Single line: send-keys -l for literal text
-    (call-process "tmux" nil nil nil "send-keys" "-t" tmux-name "-l" text)
-    (call-process "tmux" nil nil nil "send-keys" "-t" tmux-name "Enter")))
+    (claude-gravity--tmux-call "send-keys" "-t" tmux-name "-l" text)
+    (run-at-time claude-gravity--tmux-enter-delay nil
+      (lambda ()
+        (claude-gravity--tmux-call "send-keys" "-t" tmux-name "Enter")))))
 
 
 (defun claude-gravity--current-session-tmux-p ()
@@ -155,8 +170,7 @@ explicitly chose the directory when starting the session."
              ((string-match-p "trust the files\\|Do you trust" content)
               (claude-gravity--log 'info
                 "Trust prompt detected in %s, auto-accepting" tmux-name)
-              (call-process "tmux" nil nil nil
-                            "send-keys" "-t" tmux-name "y"))
+              (claude-gravity--tmux-call "send-keys" "-t" tmux-name "y"))
              ;; Still loading — retry
              ((< attempt 4)
               (run-at-time 1.5 nil #'claude-gravity--tmux-handle-trust-prompt
@@ -270,14 +284,12 @@ Returns the temp session-id (re-keyed when SessionStart hook arrives)."
         (error "Failed to create tmux session %s" tmux-name))
       ;; Prevent tmux from resizing to match attached clients
       (unless claude-gravity-tmux-sync-width
-        (call-process "tmux" nil nil nil
-                      "set-option" "-t" tmux-name "window-size" "manual"))
+        (claude-gravity--tmux-call "set-option" "-t" tmux-name "window-size" "manual"))
       ;; Set initial tmux window width
       (when claude-gravity-tmux-sync-width
         (let ((cols (claude-gravity--tmux-initial-width)))
-          (call-process "tmux" nil nil nil
-                        "resize-window" "-t" tmux-name
-                        "-x" (number-to-string cols))))
+          (claude-gravity--tmux-call "resize-window" "-t" tmux-name
+                                     "-x" (number-to-string cols))))
       ;; Register pending re-key by temp-id (allows multiple sessions per cwd)
       (puthash temp-id tmux-name claude-gravity--tmux-pending)
       ;; Create session with temp ID
@@ -353,14 +365,12 @@ CWD defaults to the session's stored cwd.  MODEL overrides the default."
         (error "Failed to create tmux session %s" tmux-name))
       ;; Prevent tmux from resizing to match attached clients
       (unless claude-gravity-tmux-sync-width
-        (call-process "tmux" nil nil nil
-                      "set-option" "-t" tmux-name "window-size" "manual"))
+        (claude-gravity--tmux-call "set-option" "-t" tmux-name "window-size" "manual"))
       ;; Set initial tmux window width
       (when claude-gravity-tmux-sync-width
         (let ((cols (claude-gravity--tmux-initial-width)))
-          (call-process "tmux" nil nil nil
-                        "resize-window" "-t" tmux-name
-                        "-x" (number-to-string cols))))
+          (claude-gravity--tmux-call "resize-window" "-t" tmux-name
+                                     "-x" (number-to-string cols))))
       (puthash session-id tmux-name claude-gravity--tmux-sessions)
       ;; Update or create session
       (let ((session (claude-gravity--ensure-session session-id cwd)))
@@ -467,6 +477,7 @@ If SESSION-ID is nil, uses the current buffer's session."
   (let ((map (make-sparse-keymap)))
     (define-key map (kbd "C-c C-c") #'claude-gravity-compose-send)
     (define-key map (kbd "C-c C-k") #'claude-gravity-compose-cancel)
+    (define-key map (kbd "C-c C-s") #'claude-gravity-compose-screenshot)
     (define-key map (kbd "C-g") #'claude-gravity-compose-cancel)
     map)
   "Keymap for `claude-gravity-compose-mode'.")
@@ -505,6 +516,36 @@ If SESSION-ID is nil, uses the current buffer's session."
   (when (and claude-gravity--compose-separator
              (< beg (marker-position claude-gravity--compose-separator)))
     (user-error "History is read-only — type below the separator")))
+
+
+(defvar claude-gravity--compose-screenshot-path nil
+  "Override path for screenshot file, used in tests.")
+
+(defvar claude-gravity--compose-screenshot-capture-fn #'claude-gravity--screencapture
+  "Function to capture a screenshot.  Called with PATH, returns exit code.
+Override in tests to avoid invoking macOS screencapture.")
+
+
+(defun claude-gravity--screencapture (path)
+  "Run macOS screencapture for interactive region selection.
+Saves screenshot to PATH.  Returns exit code (0 = success)."
+  (call-process "screencapture" nil nil nil "-i" "-x" path))
+
+
+(defun claude-gravity-compose-screenshot ()
+  "Take a screenshot and insert the file path at point.
+Uses macOS `screencapture -i -x` for interactive region selection.
+The screenshot is saved to a temporary file in /tmp/."
+  (interactive)
+  (let* ((path (or claude-gravity--compose-screenshot-path
+                (format "/tmp/claude-gravity-screenshot-%s.png"
+                        (format-time-string "%s"))))
+         (exit-code (funcall claude-gravity--compose-screenshot-capture-fn path)))
+    (if (and (= exit-code 0) (file-exists-p path))
+        (progn
+          (insert path)
+          (message "Screenshot saved: %s" path))
+      (message "Screenshot cancelled"))))
 
 
 (defun claude-gravity-compose-prompt (&optional session-id)
@@ -684,7 +725,7 @@ MODE is one of \"default\", \"auto-edit\", or \"plan\"."
          (presses (mod (- tgt-idx cur-idx) 3)))
     (when (> presses 0)
       (dotimes (_ presses)
-        (call-process "tmux" nil nil nil "send-keys" "-t" tmux-name "BTab")
+        (claude-gravity--tmux-call "send-keys" "-t" tmux-name "BTab")
         (sleep-for 0.3)))
     (when session
       (claude-gravity-model-set-permission-mode session mode)
@@ -703,7 +744,7 @@ MODE is one of \"default\", \"auto-edit\", or \"plan\"."
          (tmux-name (and sid (gethash sid claude-gravity--tmux-sessions))))
     (unless tmux-name
       (user-error "No tmux session at point"))
-    (call-process "tmux" nil nil nil "send-keys" "-t" tmux-name "Escape")
+    (claude-gravity--tmux-call "send-keys" "-t" tmux-name "Escape")
     (claude-gravity--log 'debug "Sent Escape to %s" tmux-name)))
 
 
@@ -743,7 +784,7 @@ within `claude-gravity--tmux-stop-timeout' seconds, force-kills it."
         (claude-gravity--schedule-refresh)
         (claude-gravity--log 'info "Sending Escape + /quit to tmux session [%s]" sid)
         ;; Send Escape first to interrupt any active generation
-        (call-process "tmux" nil nil nil "send-keys" "-t" tmux-name "Escape")
+        (claude-gravity--tmux-call "send-keys" "-t" tmux-name "Escape")
         ;; Delay before /quit so Escape is processed and input field is ready
         (run-at-time 2 nil #'claude-gravity--tmux-send-quit sid tmux-name)
         ;; Force-kill timeout starts after the /quit delay
@@ -754,14 +795,14 @@ within `claude-gravity--tmux-stop-timeout' seconds, force-kills it."
   "Send /quit to tmux session TMUX-NAME for SID."
   (when (claude-gravity--tmux-alive-p tmux-name)
     (claude-gravity--log 'info "Sending /quit to tmux session [%s]" sid)
-    (call-process "tmux" nil nil nil "send-keys" "-t" tmux-name "-l" "/quit")
-    (call-process "tmux" nil nil nil "send-keys" "-t" tmux-name "Enter")))
+    (claude-gravity--tmux-call "send-keys" "-t" tmux-name "-l" "/quit")
+    (claude-gravity--tmux-call "send-keys" "-t" tmux-name "Enter")))
 
 (defun claude-gravity--tmux-force-stop (sid tmux-name)
   "Force-kill tmux session TMUX-NAME for SID if still alive."
   (when (claude-gravity--tmux-alive-p tmux-name)
     (claude-gravity--log 'info "Force-killing tmux session [%s] after timeout" sid)
-    (call-process "tmux" nil nil nil "kill-session" "-t" tmux-name))
+    (claude-gravity--tmux-call "kill-session" "-t" tmux-name))
   (claude-gravity--tmux-finalize-stop sid tmux-name))
 
 (defun claude-gravity--tmux-finalize-stop (sid tmux-name)
@@ -879,7 +920,7 @@ Uses a single `tmux list-sessions' call instead of N `has-session' calls."
   (clrhash claude-gravity--tmux-resize-timers)
   (maphash (lambda (_sid tmux-name)
              (ignore-errors
-               (call-process "tmux" nil nil nil "kill-session" "-t" tmux-name)))
+               (claude-gravity--tmux-call "kill-session" "-t" tmux-name)))
            claude-gravity--tmux-sessions)
   (clrhash claude-gravity--tmux-sessions)
   (clrhash claude-gravity--tmux-pending))
@@ -1001,14 +1042,12 @@ session buffer opens alongside it automatically via SessionStart."
         (error "Failed to create tmux session %s" tmux-name))
       ;; Prevent tmux from resizing to match attached clients
       (unless claude-gravity-tmux-sync-width
-        (call-process "tmux" nil nil nil
-                      "set-option" "-t" tmux-name "window-size" "manual"))
+        (claude-gravity--tmux-call "set-option" "-t" tmux-name "window-size" "manual"))
       ;; Set initial tmux window width
       (when claude-gravity-tmux-sync-width
         (let ((cols (claude-gravity--tmux-initial-width)))
-          (call-process "tmux" nil nil nil
-                        "resize-window" "-t" tmux-name
-                        "-x" (number-to-string cols))))
+          (claude-gravity--tmux-call "resize-window" "-t" tmux-name
+                                     "-x" (number-to-string cols))))
       ;; Register pending re-key so SessionStart hooks can find this.
       ;; NOTE: `claude --resume` fires SessionStart immediately during init
       ;; (before picker).  That first SessionStart creates a session that

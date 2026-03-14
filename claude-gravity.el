@@ -28,5 +28,14 @@
 (require 'claude-gravity-daemon)
 (require 'claude-gravity-debug)
 
+;;; Evil-mode compatibility
+;; Intercept maps let our keys take priority over evil normal state,
+;; while evil global keys (C-w, :, etc.) still work.
+(with-eval-after-load 'evil
+  (evil-make-intercept-map claude-gravity-mode-map)
+  (evil-make-intercept-map claude-gravity-session-mode-map)
+  (evil-make-intercept-map claude-gravity-permission-action-mode-map)
+  (evil-make-intercept-map claude-gravity-question-action-mode-map))
+
 (provide 'claude-gravity)
 ;;; clatude-gravity.el ends here
