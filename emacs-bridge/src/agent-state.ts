@@ -1,5 +1,5 @@
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
 import { join, dirname, basename } from "path";
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from "fs";
 import { log } from "./log.js";
 import { readTail } from "./enrichment.js";
 

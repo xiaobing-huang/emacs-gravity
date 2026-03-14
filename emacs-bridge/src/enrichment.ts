@@ -2,12 +2,13 @@
 // This is the canonical location for all transcript parsing.
 // Both index.ts (one-shot bridge) and daemon-hooks.ts import from here.
 
-import { existsSync, readFileSync, statSync, mkdirSync, writeFileSync, openSync, readSync, closeSync } from "fs";
+import { Effect, ServiceMap } from "effect";
+import { existsSync, readFileSync, statSync, openSync, readSync, closeSync, mkdirSync, writeFileSync } from "fs";
 import { join, dirname, basename } from "path";
 import { log } from "./log.js";
 
 // ============================================================================
-// Transcript reading utilities
+// Sync functions (used by daemon-hooks.ts and index.ts)
 // ============================================================================
 
 /** Read the tail of a file (last maxBytes), skipping any partial first line. */
