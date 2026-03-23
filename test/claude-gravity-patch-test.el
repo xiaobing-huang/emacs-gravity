@@ -1063,5 +1063,45 @@ ensure setf alist-get works in-place."
   "text-subsumes-p requires double newline, not single."
   (should-not (claude-gravity--text-subsumes-p "hello\nworld" "hello")))
 
+;;; ═══════════════════════════════════════════════════════════════════
+;;; JSON null handling — :null must never reach list operations
+;;; ═══════════════════════════════════════════════════════════════════
+
+(ert-deftest cgp-snapshot-with-null-fields ()
+  "Session snapshot with null array fields should parse without error.
+Regression test: JSON null was parsed as :null symbol, causing
+\(wrong-type-argument listp :null) when passed to mapcar/dolist."
+  (let* ((json-str (concat
+                    "{\"sessionId\":\"s1\",\"cwd\":\"/tmp\",\"project\":\"test\","
+                    "\"status\":\"active\",\"claudeStatus\":\"idle\","
+                    "\"slug\":null,\"branch\":null,\"pid\":null,"
+                    "\"modelName\":null,\"tmuxSession\":null,"
+                    "\"startTime\":1000,\"lastEventTime\":1000,"
+                    "\"tokenUsage\":null,\"plan\":null,"
+                    "\"streamingText\":null,\"permissionMode\":null,"
+                    "\"turns\":[{\"turnNumber\":0,\"prompt\":null,"
+                    "\"steps\":[],\"agents\":[],\"tasks\":null,"
+                    "\"toolCount\":0,\"agentCount\":0,\"frozen\":false,"
+                    "\"stopText\":null,\"stopThinking\":null,"
+                    "\"tokenIn\":null,\"tokenOut\":null}],"
+                    "\"currentTurn\":0,\"toolIndex\":{},\"agentIndex\":{},"
+                    "\"tasks\":{},\"files\":{},\"totalToolCount\":0}"))
+         (parsed (json-parse-string json-str
+                                    :object-type 'alist :array-type 'list
+                                    :null-object nil :false-object nil))
+         (session (claude-gravity--json-session-to-plist parsed)))
+    (should (equal "s1" (plist-get session :session-id)))
+    (should (eq 'active (plist-get session :status)))
+    ;; Turn 0 should exist with empty tasks list
+    (let ((turn0 (car (claude-gravity--tlist-items (plist-get session :turns)))))
+      (should turn0)
+      (should (null (alist-get 'tasks turn0))))))
+
+(ert-deftest cgp-inbox-snapshot-null-items ()
+  "Inbox snapshot with null items should not error."
+  (let ((claude-gravity--inbox nil))
+    (claude-gravity--handle-inbox-snapshot '((items . nil)))
+    (should (null claude-gravity--inbox))))
+
 (provide 'claude-gravity-patch-test)
 ;;; claude-gravity-patch-test.el ends here
