@@ -233,11 +233,11 @@ Returns the diff string or nil if no changes."
     (when (string-empty-p text)
       (delete-overlay ov)
       (user-error "Empty comment, cancelled"))
-    (overlay-put ov 'face '(:underline (:style wave :color "orange")))
+    (overlay-put ov 'face 'claude-gravity-comment-underline)
     (overlay-put ov 'help-echo text)
     (overlay-put ov 'after-string
                  (propertize (format "  \u00ab %s \u00bb" text)
-                             'face '(:foreground "orange" :slant italic)))
+                             'face 'claude-gravity-comment-overlay))
     (overlay-put ov 'claude-plan-comment t)
     (push `((line . ,line-num)
             (text . ,text)

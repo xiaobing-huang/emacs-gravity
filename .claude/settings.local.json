@@ -87,7 +87,8 @@
       "Bash(make test-install:*)",
       "Bash(swift:*)",
       "Bash(/Applications/Emacs.app/Contents/MacOS/Emacs -nw --batch --eval '\\(package-initialize\\)' -L /Users/gdanov/work/playground/emacs-gravity -f batch-byte-compile /Users/gdanov/work/playground/emacs-gravity/claude-gravity-debug.el 2>&1)",
-      "WebFetch(domain:willschenk.com)"
+      "WebFetch(domain:willschenk.com)",
+      "mcp__emacs-tools__emacs_websearch"
     ],
     "additionalDirectories": [
       "/Users/gdanov/.emacs.d",

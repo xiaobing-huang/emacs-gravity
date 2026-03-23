@@ -148,7 +148,7 @@ Used as a fallback default when starting a new session with no better context.")
 (defun claude-gravity--make-comment-overlay (beg end text)
   "Create a comment overlay from BEG to END with TEXT."
   (let ((ov (make-overlay beg end)))
-    (overlay-put ov 'face '(:underline (:style wave :color "orange")))
+    (overlay-put ov 'face 'claude-gravity-comment-underline)
     (overlay-put ov 'help-echo text)
     (overlay-put ov 'claude-comment t)))
 
