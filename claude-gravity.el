@@ -31,5 +31,11 @@
 (require 'claude-gravity-daemon)
 (require 'claude-gravity-debug)
 
+;; Load Evil mode integration when evil is available.
+;; Users who load evil lazily can add:
+;;   (with-eval-after-load 'evil (require 'claude-gravity-evil))
+(when (featurep 'evil)
+  (require 'claude-gravity-evil))
+
 (provide 'claude-gravity)
 ;;; claude-gravity.el ends here
