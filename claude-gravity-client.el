@@ -400,7 +400,8 @@ Accumulates partial data and processes complete newline-delimited JSON."
             (substring claude-gravity--client-buffer (match-end 0)))
       (when (> (length line) 0)
         (condition-case err
-            (let ((msg (json-parse-string line :object-type 'alist :array-type 'list)))
+            (let ((msg (json-parse-string line :object-type 'alist :array-type 'list
+                                                    :null-object nil :false-object nil)))
               (claude-gravity--debug-capture-incoming line msg)
               (claude-gravity--handle-server-message msg))
           (error

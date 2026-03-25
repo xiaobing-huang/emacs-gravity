@@ -19,20 +19,7 @@
 ;;; hooks via the bridge.  Prompts are sent via `tmux send-keys`.  Interactive
 ;;; Claude (no -p flag) runs inside a tmux session with TERM=dumb.
 
-(defun claude-gravity--read-project-dir (prompt &optional initial-dir)
-  "Read a project directory, with helm-compatible behavior.
-When helm-mode is active, uses `helm-read-file-name' so that the user
-can navigate into the target directory and press RET to confirm.
-Falls back to `read-directory-name' otherwise."
-  (let ((dir (if (and (bound-and-true-p helm-mode)
-                      (fboundp 'helm-read-file-name))
-                 (helm-read-file-name
-                  (concat prompt "(navigate into dir, then RET) ")
-                  :initial-input (or initial-dir default-directory)
-                  :test #'file-directory-p
-                  :must-match t)
-               (read-directory-name prompt (or initial-dir default-directory)))))
-    (file-name-as-directory (expand-file-name dir))))
+;; claude-gravity--read-project-dir is defined in claude-gravity-core.el
 
 (defvar claude-gravity--tmux-sessions (make-hash-table :test 'equal)
   "Map of session-id → tmux session name for Emacs-managed Claude sessions.")
