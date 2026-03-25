@@ -7,7 +7,7 @@
 
 import { createServer } from "net";
 import type { Server, Socket } from "net";
-import { existsSync, unlinkSync, mkdirSync, writeFileSync } from "fs";
+import { existsSync, unlinkSync, mkdirSync, writeFileSync, readFileSync } from "fs";
 import { dirname, join } from "path";
 
 import type { HookEventName, HookData, Patch, ServerMessage, PlanFeedback } from "@gravity/shared";
@@ -16,6 +16,7 @@ import { InboxManager } from "./state/inbox.js";
 import { TerminalServer } from "./protocol/terminal-server.js";
 import { parseTerminalMessage } from "./protocol/messages.js";
 import { handleEvent } from "./handlers/event-handler.js";
+import { sessionEnd } from "./state/session.js";
 import { log } from "./util/log.js";
 
 // ── Configuration ────────────────────────────────────────────────────
@@ -398,6 +399,35 @@ function handleTerminalMessage(
       // TODO: implement turn-scoped auto-approve
       break;
     }
+
+    case "hint.session-dead": {
+      const { sessionId } = msg;
+      const session = store.get(sessionId);
+      if (session && session.status === "active") {
+        log(`Terminal hint: session ${sessionId} is dead — marking ended`, "info");
+        const patches = sessionEnd(session);
+        if (patches.length > 0) {
+          terminals.broadcast({ type: "session.update", sessionId, patches });
+        }
+        // Schedule purge (same as SessionEnd hook flow)
+        store.schedulePurge(sessionId, 2 * 60 * 1000, () => {
+          store.delete(sessionId);
+          inbox.removeForSession(sessionId);
+          terminals.broadcast({ type: "session.removed", sessionId });
+          terminals.unsubscribeAll(sessionId);
+          terminals.broadcast({
+            type: "overview.snapshot",
+            projects: store.getProjectSummaries(),
+          });
+          log(`Purged ended session ${sessionId}`, "info");
+        });
+        terminals.broadcast({
+          type: "overview.snapshot",
+          projects: store.getProjectSummaries(),
+        });
+      }
+      break;
+    }
   }
 }
 
@@ -408,6 +438,26 @@ let terminalServer: Server;
 
 function start(): void {
   log("gravity-server starting...", "info");
+
+  // Guard: refuse to start if another instance is already running
+  if (existsSync(PID_FILE)) {
+    try {
+      const existingPid = parseInt(readFileSync(PID_FILE, "utf-8").trim(), 10);
+      if (existingPid > 0 && existingPid !== process.pid) {
+        try {
+          process.kill(existingPid, 0); // test if alive (throws if dead)
+          log(`Another gravity-server is running (pid=${existingPid}). Exiting.`, "warn");
+          process.exit(0);
+        } catch {
+          // Process dead — stale PID file, proceed with cleanup
+          log(`Stale PID file (pid=${existingPid} dead). Taking over.`, "info");
+        }
+      }
+    } catch {
+      // PID file unreadable/corrupt — ignore, proceed
+    }
+  }
+
   hookServer = startHookServer();
   terminalServer = startTerminalServer();
   mkdirSync(dirname(PID_FILE), { recursive: true });

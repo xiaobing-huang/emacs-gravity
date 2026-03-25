@@ -34,17 +34,12 @@ sync-cache: build-server
 	@echo "Syncing to plugin cache..."
 	rsync -a --delete packages/emacs-bridge/src/ $(PLUGIN_CACHE)/src/
 	rsync -a packages/emacs-bridge/hooks/ $(PLUGIN_CACHE)/hooks/
-	cp packages/emacs-bridge/.claude-plugin/plugin.json $(PLUGIN_CACHE)/.claude-plugin/plugin.json
-	mkdir -p $(PLUGIN_CACHE)/dist && cp packages/gravity-server/dist/gravity-server.mjs $(PLUGIN_CACHE)/dist/
-	@echo "Updating cache node_modules (workspace deps)..."
-	mkdir -p $(PLUGIN_CACHE)/node_modules/@gravity
-	rsync -a --delete packages/shared/ $(PLUGIN_CACHE)/node_modules/@gravity/shared/
-	@# Write package.json without @gravity/shared (it's provided directly above)
-	node -e "const p=require('./packages/emacs-bridge/package.json'); delete p.dependencies['@gravity/shared']; process.stdout.write(JSON.stringify(p,null,2))" > $(PLUGIN_CACHE)/package.json
-	@if [ ! -d "$(PLUGIN_CACHE)/node_modules/effect" ]; then \
-		echo "Installing missing npm deps in cache..."; \
-		cd $(PLUGIN_CACHE) && npm install --ignore-scripts 2>&1 | tail -3; \
-	fi
+	rsync -a --delete packages/shared/ $(PLUGIN_CACHE)/shared/
+	cp packages/emacs-bridge/package.json $(PLUGIN_CACHE)/package.json
+	cp packages/gravity-server/dist/gravity-server.mjs $(PLUGIN_CACHE)/dist/
+	@# Rewrite @gravity/shared workspace ref to local path for standalone install
+	sed -i '' 's|"@gravity/shared": "\*"|"@gravity/shared": "file:./shared"|' $(PLUGIN_CACHE)/package.json
+	cd $(PLUGIN_CACHE) && npm install
 	@echo "Cache synced."
 
 menubar:
