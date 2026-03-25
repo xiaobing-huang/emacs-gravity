@@ -25,6 +25,45 @@
 
 
 ;;; ============================================================================
+;;; Section 0: Disable Evil plugins that shadow single-letter bindings
+;;; ============================================================================
+
+;; evil-snipe-override-mode binds s/S/f/F/t/; globally in normal state,
+;; which shadows our mode-local evil-define-key* bindings.  Disable it
+;; (and evil-snipe-local-mode) in all gravity buffers.  Same for any
+;; other global Evil minor modes that steal single-letter keys.
+
+(defun claude-gravity--evil-disable-snipe ()
+  "Disable evil-snipe in the current buffer so gravity bindings take effect."
+  (when (bound-and-true-p evil-snipe-local-mode)
+    (evil-snipe-local-mode -1))
+  (when (bound-and-true-p evil-snipe-override-local-mode)
+    (evil-snipe-override-local-mode -1)))
+
+(dolist (hook '(claude-gravity-mode-hook
+                claude-gravity-session-mode-hook
+                claude-gravity-debug-mode-hook
+                claude-gravity-popup-mode-hook))
+  (add-hook hook #'claude-gravity--evil-disable-snipe))
+
+;; For minor modes (permission, question, plan-review, compose) that
+;; activate in special-mode or markdown-mode base buffers, we cannot
+;; rely on a major-mode hook.  Instead, advise each minor mode to
+;; disable snipe when it activates.
+(dolist (mode '(claude-gravity-permission-action-mode
+                claude-gravity-question-action-mode
+                claude-gravity-plan-review-mode
+                claude-gravity-compose-mode))
+  (let ((fn (intern (format "claude-gravity--evil-disable-snipe-for-%s" mode))))
+    (defalias fn
+      (lambda (&rest _)
+        (when (symbol-value mode)
+          (claude-gravity--evil-disable-snipe)))
+      (format "Disable evil-snipe when `%s' activates." mode))
+    (advice-add mode :after fn)))
+
+
+;;; ============================================================================
 ;;; Section 1: Initial Evil States for Major Modes
 ;;; ============================================================================
 

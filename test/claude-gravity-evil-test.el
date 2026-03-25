@@ -227,6 +227,29 @@ Returns the bound command, or nil if not bound."
     (should (eq (cg-evil-test--normal-lookup claude-gravity-debug-mode-map "j")
                 #'next-line)))
 
+
+  ;;; Snipe disable hooks
+
+  (ert-deftest cg-evil-snipe-disable-hook-overview ()
+    "evil-snipe disable hook is registered for overview mode."
+    (should (memq #'claude-gravity--evil-disable-snipe
+                  claude-gravity-mode-hook)))
+
+  (ert-deftest cg-evil-snipe-disable-hook-session ()
+    "evil-snipe disable hook is registered for session mode."
+    (should (memq #'claude-gravity--evil-disable-snipe
+                  claude-gravity-session-mode-hook)))
+
+  (ert-deftest cg-evil-snipe-disable-hook-debug ()
+    "evil-snipe disable hook is registered for debug mode."
+    (should (memq #'claude-gravity--evil-disable-snipe
+                  claude-gravity-debug-mode-hook)))
+
+  (ert-deftest cg-evil-snipe-disable-hook-popup ()
+    "evil-snipe disable hook is registered for popup mode."
+    (should (memq #'claude-gravity--evil-disable-snipe
+                  claude-gravity-popup-mode-hook)))
+
   )  ;; end (when (require 'evil nil t) ...)
 
 (provide 'claude-gravity-evil-test)
