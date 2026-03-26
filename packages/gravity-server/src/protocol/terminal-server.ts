@@ -5,6 +5,7 @@
 
 import type { ServerMessage, TerminalMessage } from "@gravity/shared";
 import type { Socket } from "net";
+import { log } from "../util/log.js";
 
 export interface TerminalConnection {
   socket: Socket;
@@ -26,7 +27,7 @@ export class TerminalServer {
     });
 
     socket.on("error", (err) => {
-      console.error(`Terminal connection error: ${err.message}`);
+      log(`Terminal connection error: ${err.message}`, "error");
       socket.destroy();
     });
 
@@ -38,10 +39,11 @@ export class TerminalServer {
     const json = JSON.stringify(message) + "\n";
     // Iterate over a copy to allow mutation during iteration
     for (const conn of [...this.connections]) {
+      if (conn.socket.destroyed || !conn.socket.writable) continue;
       try {
         conn.socket.write(json);
       } catch (err) {
-        console.error(`Terminal broadcast write error: ${(err as Error).message}`);
+        log(`Terminal broadcast write error: ${(err as Error).message}`, "error");
         conn.socket.destroy();
       }
     }
@@ -52,10 +54,11 @@ export class TerminalServer {
     const json = JSON.stringify(message) + "\n";
     for (const conn of [...this.connections]) {
       if (conn.subscribedSessions.has(sessionId)) {
+        if (conn.socket.destroyed || !conn.socket.writable) continue;
         try {
           conn.socket.write(json);
         } catch (err) {
-          console.error(`Terminal subscriber write error: ${(err as Error).message}`);
+          log(`Terminal subscriber write error: ${(err as Error).message}`, "error");
           conn.socket.destroy();
         }
       }
@@ -64,10 +67,11 @@ export class TerminalServer {
 
   /** Send a message to a specific connection. */
   sendTo(conn: TerminalConnection, message: ServerMessage): void {
+    if (conn.socket.destroyed || !conn.socket.writable) return;
     try {
       conn.socket.write(JSON.stringify(message) + "\n");
     } catch (err) {
-      console.error(`Terminal sendTo write error: ${(err as Error).message}`);
+      log(`Terminal sendTo write error: ${(err as Error).message}`, "error");
       conn.socket.destroy();
     }
   }
